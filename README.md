@@ -2,7 +2,7 @@
 
 A token reduction plugin for pi-coding-agent that intelligently filters tool output to reduce token consumption by 60-90% while preserving essential information.
 
-Based on the RTK (Rust Token Killer) specification from [RTK.md](RTK.md).
+Based on the RTK (Rust Token Killer) specification from [RTK](https://github.com/rtk-ai/rtk).
 
 ## Features
 
@@ -17,35 +17,28 @@ Based on the RTK (Rust Token Killer) specification from [RTK.md](RTK.md).
 
 ## Installation
 
-### Via npm (recommended)
+Recommended: install the package via the pi package manager.
+
+### Using pi install (recommended)
 
 ```bash
-# Install into your pi extensions directory
-cd ~/.pi/agent/extensions
-npm install pi-rtk
+pi install npm:pi-rtk
 ```
 
-Then add to your pi config (`~/.pi/agent/settings.json`):
+Or add the package to your pi agent config to load automatically. Edit ~/.pi/agent/settings.json and include:
+
 ```json
 {
-  "extensions": ["pi-rtk"]
+  "packages": [
+    "npm:pi-rtk"
+  ]
 }
 ```
 
-### Manual install
+If you need to install manually (older pi versions), you can clone into the extensions directory:
 
 ```bash
-# Clone and point pi at the directory
 git clone https://github.com/mcowger/pi-rtk ~/.pi/agent/extensions/pi-rtk
-
-# Or load directly via flag
-pi --extension ~/.pi/agent/extensions/pi-rtk
-```
-
-### Load for a single session
-
-```bash
-pi --extension /path/to/pi-rtk
 ```
 
 ## Configuration
