@@ -43,6 +43,16 @@ export function clearMetrics(): void {
 	sessionMetrics.length = 0;
 }
 
+function progressBar(percent: number, width = 24): string {
+	const filled = Math.round((percent / 100) * width);
+	const empty = width - filled;
+	return `[${"█".repeat(filled)}${"░".repeat(empty)}] ${percent.toFixed(1)}%`;
+}
+
+function col(s: string, width: number): string {
+	return s.length >= width ? s.slice(0, width) : s + " ".repeat(width - s.length);
+}
+
 export function getMetricsSummary(): string {
 	if (sessionMetrics.length === 0) {
 		return "No metrics recorded yet";
@@ -50,32 +60,44 @@ export function getMetricsSummary(): string {
 
 	const totalOriginal = sessionMetrics.reduce((sum, m) => sum + m.originalChars, 0);
 	const totalFiltered = sessionMetrics.reduce((sum, m) => sum + m.filteredChars, 0);
-	const avgSavings =
-		sessionMetrics.reduce((sum, m) => sum + m.savingsPercent, 0) /
-		sessionMetrics.length;
+	const totalSaved = totalOriginal - totalFiltered;
+	const overallPct = totalOriginal > 0 ? (totalSaved / totalOriginal) * 100 : 0;
 
 	const byTool = sessionMetrics.reduce((acc, m) => {
 		if (!acc[m.tool]) {
-			acc[m.tool] = { count: 0, savings: 0 };
+			acc[m.tool] = { count: 0, originalChars: 0, filteredChars: 0 };
 		}
 		acc[m.tool].count++;
-		acc[m.tool].savings += m.savingsPercent;
+		acc[m.tool].originalChars += m.originalChars;
+		acc[m.tool].filteredChars += m.filteredChars;
 		return acc;
-	}, {} as Record<string, { count: number; savings: number }>);
+	}, {} as Record<string, { count: number; originalChars: number; filteredChars: number }>);
 
-	let summary = `RTK Token Savings Summary\n`;
-	summary += `═══════════════════════\n`;
-	summary += `Total calls: ${sessionMetrics.length}\n`;
-	summary += `Original chars: ${totalOriginal.toLocaleString()}\n`;
-	summary += `Filtered chars: ${totalFiltered.toLocaleString()}\n`;
-	summary += `Space saved: ${(totalOriginal - totalFiltered).toLocaleString()} chars (${avgSavings.toFixed(1)}%)\n\n`;
+	const W = 54;
+	const bar = "─".repeat(W);
 
-	summary += `By tool:\n`;
+	let s = `\n`;
+	s += `  RTK Token Savings\n`;
+	s += `  ${"═".repeat(W)}\n`;
+	s += `  Overall  ${progressBar(overallPct, 28)}\n`;
+	s += `  ${bar}\n`;
+	s += `  ${col("Metric", 22)} ${col("Value", 16)} Notes\n`;
+	s += `  ${bar}\n`;
+	s += `  ${col("Total calls", 22)} ${col(sessionMetrics.length.toString(), 16)}\n`;
+	s += `  ${col("Original chars", 22)} ${col(totalOriginal.toLocaleString(), 16)}\n`;
+	s += `  ${col("Filtered chars", 22)} ${col(totalFiltered.toLocaleString(), 16)} ${totalSaved.toLocaleString()} saved\n`;
+	s += `  ${bar}\n`;
+
+	s += `\n  By tool:\n`;
+	s += `  ${col("Tool", 10)} ${col("Calls", 8)} ${col("Original", 12)} ${col("Filtered", 12)}  Savings\n`;
+	s += `  ${"─".repeat(62)}\n`;
 	for (const [tool, data] of Object.entries(byTool)) {
-		summary += `  ${tool}: ${data.count} calls (${(data.savings / data.count).toFixed(1)}% avg savings)\n`;
+		const pct = data.originalChars > 0 ? (1 - data.filteredChars / data.originalChars) * 100 : 0;
+		s += `  ${col(tool, 10)} ${col(data.count.toString(), 8)} ${col(data.originalChars.toLocaleString(), 12)} ${col(data.filteredChars.toLocaleString(), 12)}  ${progressBar(pct, 16)}\n`;
 	}
+	s += `  ${"─".repeat(62)}\n`;
 
-	return summary;
+	return s;
 }
 
 export function getLastMetrics(n: number): MetricRecord[] {

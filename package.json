@@ -1,19 +1,22 @@
 {
   "name": "pi-rtk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "RTK token reduction extension for pi-coding-agent - reduces LLM token consumption 60-90% by intelligently filtering tool output",
   "type": "module",
-  "main": "./index.ts",
+  "main": "index.ts",
   "pi": {
     "extensions": [
       "./index.ts"
     ]
   },
   "scripts": {
-    "clean": "echo 'nothing to clean'",
-    "build": "echo 'nothing to build'",
     "check": "bunx tsc --noEmit"
   },
+  "files": [
+    "*.ts",
+    "techniques/*.ts",
+    "README.md"
+  ],
   "keywords": [
     "pi",
     "pi-coding-agent",
@@ -23,13 +26,14 @@
     "rtk",
     "ai"
   ],
-  "author": "",
+  "author": "Matt Cowger",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mcowger/pi-rtk.git"
+    "url": "git+https://github.com/mcowger/pi-rtk.git"
   },
-  "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
-  }
+  "bugs": {
+    "url": "https://github.com/mcowger/pi-rtk/issues"
+  },
+  "homepage": "https://github.com/mcowger/pi-rtk#readme"
 }

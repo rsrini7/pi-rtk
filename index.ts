@@ -119,12 +119,7 @@ export default function (pi: ExtensionAPI) {
 			const record = trackSavings(originalText, filteredText, "bash", technique);
 				processedCount++;
 
-				if (config.logSavings && processedCount % config.showUpdateEvery === 0) {
-					ctx.ui.notify(
-						`RTK: ${record.savingsPercent.toFixed(1)}% saved (${record.originalChars} → ${record.filteredChars} chars)`,
-						"info"
-					);
-				}
+	
 
 				return {
 					content: content.map((c) =>
@@ -162,9 +157,7 @@ export default function (pi: ExtensionAPI) {
 					const record = trackSavings(originalText, filteredText, "read", technique);
 					processedCount++;
 
-					if (config.logSavings && processedCount % config.showUpdateEvery === 0) {
-						ctx.ui.notify(`RTK: ${record.savingsPercent.toFixed(1)}% saved on ${filePath}`, "info");
-					}
+	
 
 					return {
 						content: content.map((c) =>
