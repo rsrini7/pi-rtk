@@ -1,5 +1,6 @@
 import { readFile } from "fs/promises";
-import { resolve, homedir } from "path";
+import { resolve } from "path";
+import { homedir } from "os";
 
 export type FilterLevel = "none" | "minimal" | "aggressive";
 

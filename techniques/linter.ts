@@ -52,9 +52,11 @@ function parseLine(line: string, linterType: string): Issue | null {
 		{
 			pattern: /^(.+):(\d+):(\d+):\s*(.+)$/,
 			extract: (match: RegExpMatchArray) => ({
+				severity: "ERROR" as "ERROR" | "WARNING",
 				file: match[1],
 				line: parseInt(match[2], 10),
 				content: match[4],
+				message: match[4],
 			}),
 		},
 		// error: message at file:line:col

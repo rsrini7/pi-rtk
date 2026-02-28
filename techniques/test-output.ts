@@ -40,7 +40,11 @@ export function isTestCommand(command: string | undefined | null): boolean {
 	}
 
 	const cmdLower = command.toLowerCase();
-	return TEST_COMMANDS.some((tc) => cmdLower.includes(tc.toLowerCase()));
+	return TEST_COMMANDS.some((tc) => {
+		const escaped = tc.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		// Match the test command only when it appears as a whole token (not as part of a longer word like "latest")
+		return new RegExp(`(?:^|[\\s|;&])${escaped}(?:[\\s|;&]|$)`).test(cmdLower);
+	});
 }
 
 function isFailureStart(line: string): boolean {
