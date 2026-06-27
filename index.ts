@@ -10,11 +10,13 @@ import {
 	isBashToolResult,
 	isReadToolResult,
 	isGrepToolResult,
+	isToolCallEventType,
 } from "@mariozechner/pi-coding-agent";
+import { execSync } from "child_process";
 import { Type } from "@sinclair/typebox";
 import { StringEnum } from "@mariozechner/pi-ai";
 import { loadConfig, DEFAULT_CONFIG, type RtkConfig } from "./config";
-import { trackSavings, getMetricsSummary, clearMetrics } from "./metrics";
+import { trackSavings, getMetricsSummary, clearMetrics, loadPersistedMetrics, getPersistedMetricsSummary } from "./metrics";
 import {
 	stripAnsiFast,
 	truncate,
@@ -36,6 +38,9 @@ import {
 let config: RtkConfig = DEFAULT_CONFIG;
 let enabled = true;
 let processedCount = 0;
+let metricsInitialized = false;
+let externalRtkPath: string | null = null;
+let useExternalRtk = false;
 
 export default function (pi: ExtensionAPI) {
 	let loaded = false;
@@ -47,13 +52,59 @@ export default function (pi: ExtensionAPI) {
 		try {
 			config = await loadConfig(ctx.cwd || process.cwd());
 			enabled = config.enabled;
+
+			// Load persisted metrics from previous sessions
+			if (!metricsInitialized) {
+				loadPersistedMetrics();
+				metricsInitialized = true;
+			}
+
+			// Check for external rtk binary
+			try {
+				externalRtkPath = execSync("which rtk", { encoding: "utf-8" }).trim();
+				useExternalRtk = !!externalRtkPath;
+				if (useExternalRtk && ctx.hasUI) {
+					ctx.ui.notify(`RTK: external binary found at ${externalRtkPath}`, "info");
+				}
+			} catch {
+				externalRtkPath = null;
+				useExternalRtk = false;
+			}
+
 			if (enabled && ctx.hasUI) {
-				ctx.ui.notify("RTK plugin loaded - token reduction active", "info");
+				const mode = useExternalRtk ? "external binary" : "in-process";
+				ctx.ui.notify(`RTK plugin loaded - token reduction active (${mode})`, "info");
 			}
 		} catch {
 			if (ctx.hasUI) {
 				ctx.ui.notify("RTK plugin loaded (using defaults)", "info");
+			}
 		}
+	});
+
+	// Wrap bash commands with external rtk binary (so headroom can track savings)
+	pi.on("tool_call", async (event, ctx) => {
+		if (!enabled || !useExternalRtk || !externalRtkPath) return;
+
+		if (isToolCallEventType("bash", event)) {
+			const command = event.input.command as string;
+			if (!command) return;
+
+			// Skip wrapping if command is already an rtk command or is a special shell construct
+			if (
+				command.startsWith("rtk ") ||
+				command.startsWith("source ") ||
+				command.startsWith("export ") ||
+				command.includes("rtk gain") ||
+				command.includes("rtk --version") ||
+				command.includes("rtk config")
+			) {
+				return;
+			}
+
+			// Wrap command with rtk
+			const wrappedCommand = `${externalRtkPath} ${command}`;
+			event.input.command = wrappedCommand;
 		}
 	});
 
@@ -69,6 +120,8 @@ export default function (pi: ExtensionAPI) {
 
 		// ── BASH ──────────────────────────────────────
 		if (isBashToolResult(event)) {
+			// Skip in-process filtering when external rtk binary handled it
+			if (useExternalRtk) return;
 			const content = event.content;
 			const command = (event.input as { command?: string }).command;
 
@@ -281,9 +334,37 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("rtk-clear", {
 		description: "Clear RTK metrics history",
 		handler: async (_args, ctx) => {
-		clearMetrics();
+			clearMetrics();
 			processedCount = 0;
 			ctx.ui.notify("RTK metrics cleared", "info");
+		},
+	});
+
+	pi.registerCommand("rtk-persisted", {
+		description: "Show persisted RTK metrics from all sessions",
+		handler: async (_args, ctx) => {
+			const persisted = getPersistedMetricsSummary();
+			if (!persisted) {
+				ctx.ui.notify("No persisted RTK metrics found", "info");
+				return;
+			}
+			const lines = [
+				`RTK Persisted Metrics`,
+				`Session started: ${persisted.sessionStart}`,
+				`Last updated: ${persisted.lastUpdated}`,
+				`Total records: ${persisted.totalRecords}`,
+				``,
+				`Overall Savings: ${persisted.summary.overallSavingsPercent}%`,
+				`Original: ${persisted.summary.totalOriginalChars.toLocaleString()} chars`,
+				`Filtered: ${persisted.summary.totalFilteredChars.toLocaleString()} chars`,
+				`Saved: ${persisted.summary.totalSavedChars.toLocaleString()} chars`,
+				``,
+				`By Tool:`,
+			];
+			for (const [tool, data] of Object.entries(persisted.summary.byTool)) {
+				lines.push(`  ${tool}: ${data.savingsPercent}% (${data.count} calls, ${data.savedChars.toLocaleString()} chars saved)`);
+			}
+			ctx.ui.notify(lines.join("\n"), "info");
 		},
 	});
 

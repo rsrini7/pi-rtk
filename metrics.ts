@@ -1,3 +1,7 @@
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
+
 export interface MetricRecord {
 	timestamp: string;
 	tool: string;
@@ -7,7 +11,118 @@ export interface MetricRecord {
 	savingsPercent: number;
 }
 
+export interface PersistedMetrics {
+	sessionStart: string;
+	lastUpdated: string;
+	totalRecords: number;
+	records: MetricRecord[];
+	summary: {
+		totalOriginalChars: number;
+		totalFilteredChars: number;
+		totalSavedChars: number;
+		overallSavingsPercent: number;
+		byTool: Record<string, {
+			count: number;
+			originalChars: number;
+			filteredChars: number;
+			savedChars: number;
+			savingsPercent: number;
+		}>;
+	};
+}
+
+const METRICS_DIR = join(homedir(), ".pi", "agent");
+const METRICS_FILE = join(METRICS_DIR, "rtk-metrics.json");
+
 const sessionMetrics: MetricRecord[] = [];
+let sessionStart = new Date().toISOString();
+
+function ensureMetricsDir(): void {
+	if (!existsSync(METRICS_DIR)) {
+		mkdirSync(METRICS_DIR, { recursive: true });
+	}
+}
+
+function calculateSummary(): PersistedMetrics["summary"] {
+	const totalOriginalChars = sessionMetrics.reduce((sum, m) => sum + m.originalChars, 0);
+	const totalFilteredChars = sessionMetrics.reduce((sum, m) => sum + m.filteredChars, 0);
+	const totalSavedChars = totalOriginalChars - totalFilteredChars;
+	const overallSavingsPercent = totalOriginalChars > 0
+		? Math.round((totalSavedChars / totalOriginalChars) * 100 * 100) / 100
+		: 0;
+
+	const byTool: PersistedMetrics["summary"]["byTool"] = {};
+
+	for (const m of sessionMetrics) {
+		if (!byTool[m.tool]) {
+			byTool[m.tool] = { count: 0, originalChars: 0, filteredChars: 0, savedChars: 0, savingsPercent: 0 };
+		}
+		byTool[m.tool].count++;
+		byTool[m.tool].originalChars += m.originalChars;
+		byTool[m.tool].filteredChars += m.filteredChars;
+	}
+
+	for (const tool of Object.keys(byTool)) {
+		const t = byTool[tool];
+		t.savedChars = t.originalChars - t.filteredChars;
+		t.savingsPercent = t.originalChars > 0
+			? Math.round((t.savedChars / t.originalChars) * 100 * 100) / 100
+			: 0;
+	}
+
+	return {
+		totalOriginalChars,
+		totalFilteredChars,
+		totalSavedChars,
+		overallSavingsPercent,
+		byTool,
+	};
+}
+
+export function persistMetrics(): void {
+	try {
+		ensureMetricsDir();
+		const data: PersistedMetrics = {
+			sessionStart,
+			lastUpdated: new Date().toISOString(),
+			totalRecords: sessionMetrics.length,
+			records: sessionMetrics,
+			summary: calculateSummary(),
+		};
+		writeFileSync(METRICS_FILE, JSON.stringify(data, null, 2), "utf-8");
+	} catch {
+		// Silently fail - don't break the session if persistence fails
+	}
+}
+
+export function loadPersistedMetrics(): MetricRecord[] {
+	try {
+		if (existsSync(METRICS_FILE)) {
+			const raw = readFileSync(METRICS_FILE, "utf-8");
+			const data: PersistedMetrics = JSON.parse(raw);
+			const records = data.records || [];
+			// Load into session metrics array
+			sessionMetrics.length = 0;
+			sessionMetrics.push(...records);
+			return records;
+		}
+	} catch {
+		// Ignore parse errors
+	}
+	return [];
+}
+
+export function getPersistedMetricsSummary(): PersistedMetrics | null {
+	try {
+		if (existsSync(METRICS_FILE)) {
+			const raw = readFileSync(METRICS_FILE, "utf-8");
+			return JSON.parse(raw);
+		}
+	} catch {
+		// Ignore
+	}
+	return null;
+}
 
 export function trackSavings(
 	original: string,
@@ -32,6 +147,10 @@ export function trackSavings(
 	};
 
 	sessionMetrics.push(record);
+
+	// Persist after every tracked event
+	persistMetrics();
+
 	return record;
 }
 
@@ -41,6 +160,8 @@ export function getSessionMetrics(): MetricRecord[] {
 
 export function clearMetrics(): void {
 	sessionMetrics.length = 0;
+	sessionStart = new Date().toISOString();
+	persistMetrics();
 }
 
 function progressBar(percent: number, width = 24): string {
