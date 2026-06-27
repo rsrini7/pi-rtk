@@ -2,6 +2,42 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
+// Headroom proxy URL for live metrics reporting
+const HEADROOM_PROXY_URL = process.env.HEADROOM_PROXY_URL || "http://localhost:8787";
+
+// Debounce reporting to avoid flooding the proxy
+let lastReportTime = 0;
+const REPORT_INTERVAL_MS = 5000; // Report at most every 5 seconds
+
+async function reportToHeadroomProxy(): Promise<void> {
+	const now = Date.now();
+	if (now - lastReportTime < REPORT_INTERVAL_MS) return;
+	lastReportTime = now;
+
+	try {
+		const summary = calculateSummary();
+		const payload = {
+			session: {
+				commands: sessionMetrics.length,
+				input_tokens: summary.totalOriginalChars,
+				output_tokens: summary.totalFilteredChars,
+				tokens_saved: summary.totalSavedChars,
+				savings_pct: summary.overallSavingsPercent,
+			},
+		};
+
+		await fetch(`${HEADROOM_PROXY_URL}/api/rtk-metrics`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(payload),
+		}).catch(() => {
+			// Silently fail if proxy is not running
+		});
+	} catch {
+		// Silently fail
+	}
+}
+
 export interface MetricRecord {
 	timestamp: string;
 	tool: string;
@@ -28,6 +64,15 @@ export interface PersistedMetrics {
 			savedChars: number;
 			savingsPercent: number;
 		}>;
+	};
+	// Session data for Headroom proxy dashboard
+	session?: {
+		commands: number;
+		input_tokens: number;
+		output_tokens: number;
+		tokens_saved: number;
+		savings_pct: number;
+		total_time_ms: number;
 	};
 }
 
@@ -82,12 +127,22 @@ function calculateSummary(): PersistedMetrics["summary"] {
 export function persistMetrics(): void {
 	try {
 		ensureMetricsDir();
+		const summary = calculateSummary();
 		const data: PersistedMetrics = {
 			sessionStart,
 			lastUpdated: new Date().toISOString(),
 			totalRecords: sessionMetrics.length,
 			records: sessionMetrics,
-			summary: calculateSummary(),
+			summary,
+			// Add session section for Headroom proxy dashboard
+			session: {
+				commands: sessionMetrics.length,
+				input_tokens: summary.totalOriginalChars,
+				output_tokens: summary.totalFilteredChars,
+				tokens_saved: summary.totalSavedChars,
+				savings_pct: summary.overallSavingsPercent,
+				total_time_ms: 0,
+			},
 		};
 		writeFileSync(METRICS_FILE, JSON.stringify(data, null, 2), "utf-8");
 	} catch {
@@ -150,6 +205,9 @@ export function trackSavings(
 
 	// Persist after every tracked event
 	persistMetrics();
+
+	// Report to Headroom proxy for dashboard display
+	reportToHeadroomProxy();
 
 	return record;
 }
