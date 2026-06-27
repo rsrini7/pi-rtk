@@ -1,44 +1,32 @@
-# RTK Plugin for Pi-Coding-Agent
+# pi-rtk
 
-A token reduction plugin for pi-coding-agent that intelligently filters tool output to reduce token consumption by 60-90% while preserving essential information.
-
-Based on the RTK (Rust Token Killer) specification from [RTK](https://github.com/rtk-ai/rtk).
+Token reduction plugin for [pi-coding-agent](https://github.com/earendil-works/pi-coding-agent) that wraps commands with the external [RTK binary](https://github.com/rtk-ai/rtk) for **60-90% token savings**.
 
 ## Features
 
-- **Source Code Filtering**: Remove comments and normalize whitespace (minimal) or keep only signatures (aggressive)
-- **Build Output Filtering**: Remove compilation noise, keep only errors and warnings
-- **Test Output Aggregation**: Summarize test results, show failures only
-- **Git Compaction**: Compact diffs, status, and log output
-- **Search Result Grouping**: Group grep results by file with counts
-- **Linter Aggregation**: Summarize lint errors by rule and file
-- **ANSI Stripping**: Remove color codes and formatting
-- **Smart Truncation**: Intelligently truncate large outputs
+- **External RTK wrapping** - Wraps bash commands with the rtk binary (headroom can track savings)
+- **Source Code Filtering** - Remove comments and normalize whitespace (minimal) or keep only signatures (aggressive)
+- **Build Output Filtering** - Remove compilation noise, keep only errors and warnings
+- **Test Output Aggregation** - Summarize test results, show failures only
+- **Git Compaction** - Compact diffs, status, and log output
+- **Search Result Grouping** - Group grep results by file with counts
+- **Linter Aggregation** - Summarize lint errors by rule and file
+- **ANSI Stripping** - Remove color codes and formatting
+- **Smart Truncation** - Intelligently truncate large outputs
 
 ## Installation
 
-Recommended: install the package via the pi package manager.
-
-### Using pi install (recommended)
-
 ```bash
+# From npm
 pi install npm:pi-rtk
-```
 
-Or add the package to your pi agent config to load automatically. Edit ~/.pi/agent/settings.json and include:
+# From GitHub
+pi install git:rsrini7/pi-rtk
 
-```json
+# Or add to ~/.pi/agent/settings.json
 {
-  "packages": [
-    "npm:pi-rtk"
-  ]
+  "packages": ["npm:pi-rtk"]
 }
-```
-
-If you need to install manually (older pi versions), you can clone into the extensions directory:
-
-```bash
-git clone https://github.com/mcowger/pi-rtk ~/.pi/agent/extensions/pi-rtk
 ```
 
 ## Configuration
@@ -110,14 +98,30 @@ The `rtk_configure` tool is registered for use by the AI agent to programmatical
 | Git output | 60-80% |
 | Search results | 40-60% |
 
-## Architecture
+## How It Works
 
-The plugin intercepts `tool_result` events and applies appropriate filtering based on:
-- Tool type (bash, read, grep)
-- Command context (build, test, git, etc.)
-- File extension for source code
+### External RTK Binary (default)
 
-Metrics are tracked in-memory and can be viewed with `/rtk-stats`.
+When the external `rtk` binary is found in PATH, the plugin:
+
+1. **`tool_call`** - Wraps bash commands with `rtk` before execution
+2. **`tool_result`** - Skips in-process filtering (rtk binary handles it)
+
+This allows headroom to track RTK savings via `rtk gain`.
+
+### In-Process Fallback
+
+If no external rtk binary is found, the plugin falls back to in-process filtering:
+
+1. **`tool_result`** - Filters output after tool execution
+2. Metrics tracked in `~/.pi/agent/rtk-metrics.json`
+
+## Metrics
+
+Metrics are persisted to `~/.pi/agent/rtk-metrics.json` and survive across sessions.
+
+- `/rtk-stats` - Show current session and lifetime statistics
+- `/rtk-clear` - Clear session metrics
 
 ## License
 
