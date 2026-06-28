@@ -16,17 +16,46 @@ Token reduction plugin for [pi-coding-agent](https://github.com/earendil-works/p
 
 ## Installation
 
+### Prerequisites
+
+1. Install [pi-coding-agent](https://github.com/earendil-works/pi-coding-agent)
+2. Install [RTK binary](https://github.com/rtk-ai/rtk):
+   ```bash
+   # macOS
+   brew install rtk-ai/tap/rtk
+   
+   # Or via cargo
+   cargo install rtk
+   ```
+
+### Install pi-rtk
+
 ```bash
-# From npm
-pi install npm:pi-rtk
+# Option 1: Install via pi (recommended)
+pi install npm:@rsrini/pi-rtk
 
-# From GitHub
-pi install git:rsrini7/pi-rtk
-
-# Or add to ~/.pi/agent/settings.json
+# Option 2: Add to ~/.pi/agent/settings.json
 {
-  "packages": ["npm:pi-rtk"]
+  "packages": ["npm:@rsrini/pi-rtk"]
 }
+```
+
+## Quick Start
+
+After installation, restart pi. The plugin automatically:
+1. Detects the `rtk` binary in your PATH
+2. Wraps bash commands with rtk before execution
+3. Filters output for maximum token savings
+
+```bash
+# Start pi - rtk is automatically active
+pi
+
+# Check savings
+/rtk-stats
+
+# View current config
+/rtk-what
 ```
 
 ## Configuration
@@ -57,36 +86,20 @@ Create `~/.pi/agent/rtk-config.json`:
 - `minimal`: Remove comments, normalize whitespace
 - `aggressive`: Keep only signatures and structure
 
-Source code filtering can be toggled independently of its level via commands or the `rtk_configure` tool.
-
 ## Commands
 
-- `/rtk-stats` - Show token savings statistics
-- `/rtk-on` / `/rtk-off` - Enable/disable token reduction
-- `/rtk-clear` - Clear metrics history
-- `/rtk-what` - Show current technique configuration
-- `/rtk-toggle-ansiStripping` - Toggle ANSI stripping
-- `/rtk-toggle-truncation` - Toggle output truncation
-- `/rtk-toggle-sourceCodeFiltering` - Toggle source code filtering
-- `/rtk-toggle-smartTruncation` - Toggle smart truncation
-- `/rtk-toggle-testOutputAggregation` - Toggle test output aggregation
-- `/rtk-toggle-buildOutputFiltering` - Toggle build output filtering
-- `/rtk-toggle-gitCompaction` - Toggle git compaction
-- `/rtk-toggle-searchResultGrouping` - Toggle search result grouping
-- `/rtk-toggle-linterAggregation` - Toggle linter aggregation
+| Command | Description |
+|---------|-------------|
+| `/rtk-stats` | Show token savings statistics |
+| `/rtk-on` | Enable token reduction |
+| `/rtk-off` | Disable token reduction |
+| `/rtk-what` | Show current configuration |
+| `/rtk-clear` | Clear metrics history |
+| `/rtk-toggle-*` | Toggle individual techniques |
 
 ## Agent Tool
 
-The `rtk_configure` tool is registered for use by the AI agent to programmatically adjust any RTK parameter at runtime. This is particularly useful when file edits fail due to text-matching errors: the agent can temporarily disable `sourceCodeFiltering`, re-read the file, apply the edit, and re-enable filtering.
-
-## Supported Languages
-
-- TypeScript/JavaScript
-- Python
-- Rust
-- Go
-- Java
-- C/C++
+The `rtk_configure` tool allows the AI agent to adjust settings at runtime. Useful when file edits fail due to text-matching errors.
 
 ## Token Savings
 
@@ -100,29 +113,23 @@ The `rtk_configure` tool is registered for use by the AI agent to programmatical
 
 ## How It Works
 
-### External RTK Binary (default)
+```
+Bash command → RTK wraps → Execute → RTK filters → Pi processes
+                     ↑                           ↑
+              tool_call hook              tool_result hook
+```
 
-When the external `rtk` binary is found in PATH, the plugin:
+## Combining with Headroom
 
-1. **`tool_call`** - Wraps bash commands with `rtk` before execution
-2. **`tool_result`** - Skips in-process filtering (rtk binary handles it)
+For maximum savings, combine with [pi-headroom](https://www.npmjs.com/package/@rsrini/pi-headroom):
 
-This allows headroom to track RTK savings via `rtk gain`.
+```bash
+pi install npm:@rsrini/pi-rtk
+pi install npm:@rsrini/pi-headroom
+```
 
-### In-Process Fallback
-
-If no external rtk binary is found, the plugin falls back to in-process filtering:
-
-1. **`tool_result`** - Filters output after tool execution
-2. Metrics tracked in `~/.pi/agent/rtk-metrics.json`
-
-## Metrics
-
-Metrics are persisted to `~/.pi/agent/rtk-metrics.json` and survive across sessions.
-
-- `/rtk-stats` - Show current session and lifetime statistics
-- `/rtk-clear` - Clear session metrics
+Or use the `hpi` wrapper script (see [pi-headroom README](https://www.npmjs.com/package/@rsrini/pi-headroom)).
 
 ## License
 
-MIT - Based on the RTK specification
+MIT

@@ -1,6 +1,6 @@
 {
   "name": "@rsrini/pi-rtk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "RTK token reduction extension for pi-coding-agent - reduces LLM token consumption 60-90% by wrapping commands with external rtk binary and intelligently filtering tool output",
   "type": "module",
   "main": "index.ts",
